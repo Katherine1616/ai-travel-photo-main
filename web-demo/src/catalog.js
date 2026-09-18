@@ -85,15 +85,15 @@ export const products = [
 ];
 
 export const avatarProfiles = [
-  { id: 'slim-straight', build: '偏瘦', shape: '直筒型', label: 'A', image: products[1].colors[0].url },
-  { id: 'slim-curved', build: '偏瘦', shape: '曲线型', label: 'B', image: products[3].colors[0].url },
-  { id: 'slim-pear', build: '偏瘦', shape: '梨型', label: 'C', image: products[4].colors[0].url },
-  { id: 'standard-straight', build: '标准', shape: '直筒型', label: 'D', image: products[2].colors[0].url },
-  { id: 'standard-curved', build: '标准', shape: '曲线型', label: 'E', image: products[0].colors[0].url },
-  { id: 'standard-pear', build: '标准', shape: '梨型', label: 'F', image: products[4].colors[1].url },
-  { id: 'full-straight', build: '丰满', shape: '直筒型', label: 'G', image: products[5].colors[0].url },
-  { id: 'full-curved', build: '丰满', shape: '曲线型', label: 'H', image: products[1].colors[1].url },
-  { id: 'full-pear', build: '丰满', shape: '梨型', label: 'I', image: products[5].colors[1].url },
+  { id: 'slim-straight', build: '偏瘦', shape: '直筒型', label: 'A' },
+  { id: 'slim-curved', build: '偏瘦', shape: '曲线型', label: 'B' },
+  { id: 'slim-pear', build: '偏瘦', shape: '梨型', label: 'C' },
+  { id: 'standard-straight', build: '标准', shape: '直筒型', label: 'D' },
+  { id: 'standard-curved', build: '标准', shape: '曲线型', label: 'E' },
+  { id: 'standard-pear', build: '标准', shape: '梨型', label: 'F' },
+  { id: 'full-straight', build: '丰满', shape: '直筒型', label: 'G' },
+  { id: 'full-curved', build: '丰满', shape: '曲线型', label: 'H' },
+  { id: 'full-pear', build: '丰满', shape: '梨型', label: 'I' },
 ];
 
 export const stores = [

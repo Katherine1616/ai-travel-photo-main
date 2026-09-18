@@ -26,10 +26,9 @@ const state = {
   category: '全部',
   colorIndex: Number(params.get('color')) || 0,
   profileId: params.get('avatar') || 'standard-curved',
-  heightBand: '160–169 cm',
+  heightBand: params.get('height') || '160–169 cm',
   quick: { height: '160–169 cm', build: '标准', shape: '曲线型' },
   precise: { height: 165, weight: 55, chest: 84, waist: 68, hips: 91 },
-  compare: 'result',
   scenario: 'success',
   progress: 0,
   resultSeconds: 45,
@@ -37,6 +36,8 @@ const state = {
   modal: '',
   toast: '',
   phoneComplete: false,
+  profileReady: Boolean(params.get('avatar')),
+  changingProduct: false,
 };
 
 const categories = ['全部', ...new Set(products.map((product) => product.category))];
@@ -60,6 +61,7 @@ function applyPhoneProfile(payload) {
   state.profileId = payload.profileId;
   state.heightBand = payload.heightBand;
   state.phoneComplete = true;
+  state.profileReady = true;
   if (state.page === 'phone-wait') {
     setPage('confirm');
     toast('手机填写已完成');
@@ -77,6 +79,61 @@ if (savedPhoneProfile) applyPhoneProfile(JSON.parse(savedPhoneProfile));
 
 function currentProfile() {
   return avatarProfiles.find((profile) => profile.id === state.profileId) || avatarProfiles[4];
+}
+
+function silhouetteFigure(profile = currentProfile(), dressed = false, className = '') {
+  const product = currentProduct();
+  const color = currentColor();
+  const buildScale = { '偏瘦': 0.86, '标准': 1, '丰满': 1.16 }[profile.build] || 1;
+  const shape = {
+    '直筒型': { shoulder: 92, waist: 77, hip: 92 },
+    '曲线型': { shoulder: 98, waist: 63, hip: 99 },
+    '梨型': { shoulder: 86, waist: 67, hip: 108 },
+  }[profile.shape] || { shoulder: 96, waist: 68, hip: 98 };
+  const shoulder = shape.shoulder * buildScale;
+  const waist = shape.waist * buildScale;
+  const hip = shape.hip * buildScale;
+  const left = (width) => 160 - width / 2;
+  const right = (width) => 160 + width / 2;
+  const heightScale = state.heightBand.startsWith('150') ? 0.92 : state.heightBand.startsWith('170') ? 1.06 : 1;
+  const translateY = 548 * (1 - heightScale);
+  const textureId = `fabric-${product.id}-${state.colorIndex}-${profile.id}`.replace(/[^a-z0-9-]/gi, '');
+  const spriteIndex = Math.max(0, products.findIndex((item) => item.id === product.id));
+  const spriteX = -(spriteIndex % 3) * 320;
+  const spriteY = -Math.floor(spriteIndex / 3) * 560;
+  const garmentType = {
+    'noir-blazer': 'coat',
+    'ivory-dress': 'top',
+    'denim-jacket': 'sweatshirt',
+    'red-knit': 'longcoat',
+    'pleated-skirt': 'shirt',
+    'trench-coat': 'pants',
+  }[product.id] || 'top';
+
+  const garment = {
+    coat: `<path class="garment-piece" d="M ${left(shoulder + 14)} 135 Q 160 112 ${right(shoulder + 14)} 135 L ${right(waist + 20)} 250 L ${right(hip + 28)} 438 Q 160 462 ${left(hip + 28)} 438 L ${left(waist + 20)} 250 Z"/><path class="garment-sleeve" d="M ${left(shoulder)} 150 L 68 305 M ${right(shoulder)} 150 L 252 305"/><path class="garment-detail" d="M 160 132 L 147 250 M 160 132 L 173 250 M ${left(waist + 8)} 252 L ${right(waist + 8)} 252"/>`,
+    longcoat: `<path class="garment-piece" d="M ${left(shoulder + 16)} 137 Q 160 112 ${right(shoulder + 16)} 137 L ${right(waist + 22)} 250 L ${right(hip + 34)} 500 Q 160 520 ${left(hip + 34)} 500 L ${left(waist + 22)} 250 Z"/><path class="garment-sleeve" d="M ${left(shoulder)} 150 L 66 330 M ${right(shoulder)} 150 L 254 330"/><path class="garment-detail" d="M 160 134 L 160 490 M ${left(waist + 10)} 258 L ${right(waist + 10)} 258"/>`,
+    sweatshirt: `<path class="garment-piece" d="M ${left(shoulder + 18)} 142 Q 160 116 ${right(shoulder + 18)} 142 L ${right(waist + 25)} 294 Q 160 310 ${left(waist + 25)} 294 Z"/><path class="garment-sleeve wide" d="M ${left(shoulder)} 157 L 62 323 M ${right(shoulder)} 157 L 258 323"/><path class="garment-detail" d="M 136 143 Q 160 177 184 143 M ${left(waist + 18)} 286 L ${right(waist + 18)} 286"/>`,
+    shirt: `<path class="garment-piece" d="M ${left(shoulder + 12)} 140 Q 160 117 ${right(shoulder + 12)} 140 L ${right(waist + 12)} 290 Q 160 302 ${left(waist + 12)} 290 Z"/><path class="garment-sleeve" d="M ${left(shoulder)} 151 L 71 286 M ${right(shoulder)} 151 L 249 286"/><path class="garment-detail" d="M 160 140 L 160 288 M 143 140 L 160 165 L 177 140"/>`,
+    top: `<path class="garment-piece" d="M ${left(shoulder + 4)} 155 Q 160 134 ${right(shoulder + 4)} 155 L ${right(waist + 8)} 278 Q 160 292 ${left(waist + 8)} 278 Z"/><path class="garment-detail" d="M ${left(shoulder - 12)} 157 Q 160 178 ${right(shoulder - 12)} 157"/>`,
+    pants: `<path class="garment-piece" d="M ${left(hip + 8)} 290 Q 160 276 ${right(hip + 8)} 290 L ${right(hip / 2 + 25)} 540 L 166 540 L 160 340 L 154 540 L ${left(hip / 2 + 25)} 540 Z"/><path class="garment-detail" d="M ${left(hip + 4)} 304 L ${right(hip + 4)} 304 M 160 302 L 160 338"/>`,
+  }[garmentType];
+
+  return `<div class="silhouette-figure ${dressed ? 'dressed' : 'plain'} ${className}" role="img" aria-label="${dressed ? `${product.name} 试穿效果` : '虚拟形象剪影'}">
+    <svg viewBox="0 0 320 560" aria-hidden="true">
+      <defs><pattern id="${textureId}" width="320" height="560" patternUnits="userSpaceOnUse"><image href="/assets/forme-garments-v1.png" x="${spriteX}" y="${spriteY}" width="960" height="1120" preserveAspectRatio="none"/><rect width="320" height="560" fill="${color.hex}" fill-opacity=".1"/></pattern></defs>
+      <g transform="translate(0 ${translateY}) scale(1 ${heightScale})">
+        <g class="figure-body">
+          <circle cx="160" cy="72" r="31"/>
+          <rect x="148" y="100" width="24" height="31" rx="10"/>
+          <path d="M ${left(shoulder)} 140 Q 160 118 ${right(shoulder)} 140 L ${right(waist)} 258 Q 160 278 ${left(waist)} 258 Z"/>
+          <path class="figure-arms" d="M ${left(shoulder - 5)} 151 L 73 330 M ${right(shoulder - 5)} 151 L 247 330"/>
+          <path d="M ${left(hip)} 270 Q 160 245 ${right(hip)} 270 L ${right(hip - 16)} 340 L 177 340 L 181 538 L 160 538 L 154 354 L 148 538 L 127 538 L 143 340 L ${left(hip - 16)} 340 Z"/>
+        </g>
+        ${dressed ? `<g class="figure-garment" style="--garment-color:${color.hex}"><g fill="url(#${textureId})">${garment}</g></g>` : ''}
+      </g>
+    </svg>
+  </div>`;
 }
 
 function money(value) {
@@ -155,10 +212,10 @@ function renderCatalog() {
         <section class="catalog-hero">
           <img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt="${product.name}">
           <div class="hero-index">LOOK ${String(products.findIndex((item) => item.id === product.id) + 1).padStart(2, '0')}</div>
-          <div class="hero-copy"><p>${product.category} / ${product.badge}</p><h1>${product.name}</h1><span>${product.subtitle}</span><strong>${money(product.price)}</strong><button class="primary-btn hero-action" data-action="start">开始试穿 ${icon('arrow-right', 26)}</button></div>
+          <div class="hero-copy"><p>${product.category} / ${product.badge}</p><h1>${product.name}</h1><span>${product.subtitle}</span><strong>${money(product.price)}</strong><button class="primary-btn hero-action" data-action="start">${state.changingProduct ? '使用当前形象试穿' : '开始试穿'} ${icon('arrow-right', 26)}</button></div>
         </section>
         <section class="catalog-panel">
-          <div class="catalog-prompt"><p>FORME CENTRAL / TODAY'S EDIT</p><h2>选一套，看看<br>上身效果</h2></div>
+          <div class="catalog-prompt"><p>${state.changingProduct ? 'CURRENT FIT / KEEP YOUR AVATAR' : "FORME CENTRAL / TODAY'S EDIT"}</p><h2>${state.changingProduct ? '换一件，继续<br>使用当前形象' : '选一套，看看<br>上身效果'}</h2></div>
           <nav class="category-nav" aria-label="服装分类">${categories.map((category) => `<button class="${state.category === category ? 'active' : ''}" data-category="${category}">${category}</button>`).join('')}</nav>
           <div class="product-grid">
             ${filtered.map((item) => `
@@ -167,7 +224,7 @@ function renderCatalog() {
                 <span class="product-copy"><strong>${item.name}</strong><small>${money(item.price)}</small></span>
               </button>`).join('')}
           </div>
-          <div class="privacy-note">${icon('shield-check', 22)}<span>无需照片或账号，本次体验结束后自动清除</span></div>
+          <div class="privacy-note">${icon(state.changingProduct ? 'refresh-cw' : 'shield-check', 22)}<span>${state.changingProduct ? '当前形象已保留，选择商品后直接生成' : '无需照片或账号，本次体验结束后自动清除'}</span></div>
         </section>
       </main>
     </div>`;
@@ -222,8 +279,8 @@ function renderQuick() {
         </section>
         <section class="avatar-preview">
           <span class="preview-label">形象预览</span>
-          <img src="${preview.image}" alt="虚拟形象预览">
-          <div><strong>你的虚拟形象</strong><span>预览会随选择更新</span></div>
+          ${silhouetteFigure(preview)}
+          <div class="avatar-caption"><strong>你的虚拟形象</strong><span>预览会随选择更新</span></div>
         </section>
       </main>
     </div>`;
@@ -272,7 +329,7 @@ function renderConfirm() {
     <div class="kiosk-page">
       ${backBar('准备试穿', '确认形象与服装后开始生成。')}
       <main class="split-stage confirm-stage">
-        <section class="avatar-preview large"><span class="preview-label">虚拟形象</span><img src="${profile.image}" alt="虚拟形象"></section>
+        <section class="avatar-preview large"><span class="preview-label">虚拟形象</span>${silhouetteFigure(profile)}</section>
         <section class="confirm-copy">
           <p class="eyebrow">READY TO TRY ON</p><h2>形象已准备好</h2>
           <div class="outfit-row"><img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt=""><div><small>即将试穿</small><strong>${product.name}</strong><span>${currentColor().name} · ${money(product.price)}</span></div></div>
@@ -293,7 +350,7 @@ function renderProcessing() {
     <div class="kiosk-page processing-page">
       ${flowHeader(3)}
       <main class="processing-stage">
-        <section class="scan-preview"><img src="${product.colors[state.colorIndex].url}" style="object-position:${product.colors[state.colorIndex].position}" alt="${product.name}"><span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
+        <section class="scan-preview">${silhouetteFigure(currentProfile(), true, 'processing-figure')}<span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
         <section class="processing-copy">
           <p class="eyebrow">预计还需 ${Math.max(1, Math.ceil((100 - state.progress) / 20))} 秒</p>
           <h1>正在把 ${product.name}<br>适配到你的虚拟形象</h1>
@@ -320,6 +377,7 @@ function mobileUrl(mode) {
   if (mode === 'result') {
     url.searchParams.set('color', String(state.colorIndex));
     url.searchParams.set('avatar', state.profileId);
+    url.searchParams.set('height', state.heightBand);
     url.searchParams.set('expires', String(Date.now() + 30 * 60 * 1000));
   }
   return url.toString();
@@ -327,22 +385,19 @@ function mobileUrl(mode) {
 
 function renderResult() {
   const product = currentProduct();
-  const profile = currentProfile();
-  const image = state.compare === 'result' ? currentColor().url : profile.image;
   const sizes = Object.entries(product.stock);
   return `
     <div class="kiosk-page result-page">
       ${flowHeader(4)}
       <main class="result-layout">
         <section class="result-visual">
-          <div class="compare-control"><button class="${state.compare === 'avatar' ? 'active' : ''}" data-compare="avatar">试穿前</button><button class="${state.compare === 'result' ? 'active' : ''}" data-compare="result">试穿效果</button></div>
-          <img src="${image}" style="object-position:${state.compare === 'result' ? currentColor().position : 'center'}" alt="${state.compare === 'result' ? product.name : '虚拟形象'}">
+          ${silhouetteFigure(currentProfile(), true, 'result-figure')}
           <span class="result-disclaimer">AI 效果仅供款式与轮廓参考</span>
         </section>
         <section class="result-details">
           <p class="success-kicker">${icon('circle-check', 18)} 试穿效果已生成</p><h1>${product.name}</h1><p class="product-subtitle">${product.subtitle}</p><strong class="result-price">${money(product.price)}</strong>
           <div class="detail-group"><label>颜色</label><div class="color-options">${product.colors.map((color, index) => `<button class="${state.colorIndex === index ? 'active' : ''}" data-color="${index}"><i style="background:${color.hex}"></i><span>${color.name}</span></button>`).join('')}</div></div>
-          <div class="detail-group"><label>本店尺码库存</label><div class="size-stock">${sizes.map(([size, count]) => `<span class="${count === 0 ? 'soldout' : ''}"><b>${size}</b><small>${count ? `${count} 件` : '缺货'}</small></span>`).join('')}</div></div>
+          <div class="detail-group"><label>本店尺码库存${state.selectedSize ? ` · 已选 ${state.selectedSize}` : ''}</label><div class="size-stock">${sizes.map(([size, count]) => `<button class="${state.selectedSize === size ? 'active' : ''} ${count === 0 ? 'soldout' : ''}" data-size="${size}" ${count === 0 ? 'disabled' : ''}><b>${size}</b><small>${count ? `${count} 件` : '缺货'}</small></button>`).join('')}</div></div>
           <div class="result-actions"><button class="secondary-btn" data-action="change-product">${icon('shirt')} 换一件</button><button class="secondary-btn" data-action="regenerate">${icon('refresh-cw')} 重新生成</button></div>
           <div class="handoff-strip"><div class="small-qr"><canvas class="js-qr" data-qr="${resultUrl()}"></canvas></div><div><strong>扫码带到手机</strong><span>查看实时库存、到店试穿或购买</span><small>${state.resultSeconds} 秒后自动清除大屏结果</small></div><button class="primary-btn" data-action="store-buy">本店购买</button></div>
           <button class="clear-link" data-action="clear-session">${icon('trash-2', 16)} 结束并清除本次数据</button>
@@ -381,7 +436,7 @@ function renderMobile() {
   return `
     <div class="mobile-page result-mobile">
       <header class="mobile-header"><span class="brand-mark">F</span><div><strong>FORME</strong><small>CENTRAL STORE</small></div><button class="icon-btn" data-action="favorite" title="收藏">${icon('heart')}</button></header>
-      <main class="mobile-content no-top"><div class="mobile-result-image"><img src="${color.url}" style="object-position:${color.position}" alt="${product.name}"><span>AI 试穿效果</span></div>
+      <main class="mobile-content no-top"><div class="mobile-result-image">${silhouetteFigure(currentProfile(), true, 'mobile-figure')}<span>AI 试穿效果</span></div>
         <section class="mobile-product"><p>${product.category} · ${color.name}</p><h1>${product.name}</h1><strong>${money(product.price)}</strong><span>${product.subtitle}</span></section>
         <section class="mobile-section"><div class="mobile-section-title"><h2>选择尺码</h2><button data-action="size-help">尺码建议</button></div><div class="mobile-sizes">${Object.entries(product.stock).map(([size, count]) => `<button class="${state.selectedSize === size ? 'active' : ''} ${count === 0 ? 'soldout' : ''}" data-size="${size}" ${count === 0 ? 'disabled' : ''}><b>${size}</b><span>${count ? `${count} 件` : '缺货'}</span></button>`).join('')}</div></section>
         <section class="mobile-section"><h2>怎么带走</h2><div class="fulfilment-list"><button data-fulfilment="pickup">${icon('shopping-bag')}<span><strong>本店购买，立即取货</strong><small>选择后锁定 10 分钟</small></span>${icon('chevron-right')}</button><button data-fulfilment="fitting">${icon('door-open')}<span><strong>保留商品，进店试穿</strong><small>出示预约码，店员备货</small></span>${icon('chevron-right')}</button><button data-fulfilment="delivery">${icon('truck')}<span><strong>线上配送</strong><small>预计 2–3 天送达</small></span>${icon('chevron-right')}</button><button data-fulfilment="transfer">${icon('map-pin')}<span><strong>附近门店 / 跨店取货</strong><small>${stores[1].name} 有货</small></span>${icon('chevron-right')}</button></div></section>
@@ -473,6 +528,8 @@ function startCountdown() {
       window.clearInterval(countdownTimer);
       state.profileId = 'standard-curved';
       state.colorIndex = 0;
+      state.profileReady = false;
+      state.changingProduct = false;
       setPage('catalog');
       toast('会话已结束，数据已清除');
     } else if (state.resultSeconds % 5 === 0 || state.resultSeconds <= 5) render();
@@ -495,6 +552,7 @@ app.addEventListener('click', (event) => {
   if (productButton) {
     state.productId = productButton.dataset.product;
     state.colorIndex = 0;
+    state.selectedSize = '';
     return render();
   }
   const category = event.target.closest('[data-category]');
@@ -514,11 +572,6 @@ app.addEventListener('click', (event) => {
     state.colorIndex = Number(color.dataset.color);
     return render();
   }
-  const compare = event.target.closest('[data-compare]');
-  if (compare) {
-    state.compare = compare.dataset.compare;
-    return render();
-  }
   const scenario = event.target.closest('[data-scenario]');
   if (scenario) {
     state.scenario = scenario.dataset.scenario;
@@ -527,7 +580,7 @@ app.addEventListener('click', (event) => {
   const size = event.target.closest('[data-size]');
   if (size) {
     state.selectedSize = size.dataset.size;
-    return render();
+    return toast(`已选择 ${state.selectedSize} 码`);
   }
   const fulfilment = event.target.closest('[data-fulfilment]');
   if (fulfilment) {
@@ -536,14 +589,25 @@ app.addEventListener('click', (event) => {
   }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (!action) return;
-  if (action === 'home') return setPage('catalog');
+  if (action === 'home') {
+    state.changingProduct = false;
+    return setPage('catalog');
+  }
   if (action === 'back') return handleBack();
-  if (action === 'start') return setPage('avatar-choice');
+  if (action === 'start') {
+    if (state.changingProduct && state.profileReady) {
+      state.changingProduct = false;
+      state.selectedSize = '';
+      return startGeneration();
+    }
+    return setPage('avatar-choice');
+  }
   if (action === 'quick') return setPage('quick');
   if (action === 'precise') return setPage(state.phoneComplete ? 'confirm' : 'phone-wait');
   if (action === 'confirm-quick') {
     state.profileId = profileFromQuick().id;
     state.heightBand = state.quick.height;
+    state.profileReady = true;
     return setPage('confirm');
   }
   if (action === 'simulate-phone') {
@@ -554,11 +618,17 @@ app.addEventListener('click', (event) => {
   if (action === 'adjust') return setPage('avatar-choice');
   if (action === 'generate' || action === 'retry') return startGeneration();
   if (action === 'cancel-generation') return setPage('confirm');
-  if (action === 'change-product') return setPage('catalog');
+  if (action === 'change-product') {
+    state.changingProduct = state.profileReady;
+    state.selectedSize = '';
+    return setPage('catalog');
+  }
   if (action === 'regenerate') return startGeneration();
   if (action === 'clear-session') {
     state.profileId = 'standard-curved';
     state.colorIndex = 0;
+    state.profileReady = false;
+    state.changingProduct = false;
     setPage('catalog');
     return toast('本次体验数据已清除');
   }
@@ -581,6 +651,7 @@ app.addEventListener('submit', (event) => {
   state.heightBand = values.height < 160 ? '150–159 cm' : values.height >= 170 ? '170 cm 以上' : '160–169 cm';
   state.profileId = profileFromInputs(values).id;
   state.phoneComplete = true;
+  state.profileReady = true;
   const payload = { sessionId, profileId: state.profileId, heightBand: state.heightBand };
   localStorage.setItem(`forme-fitting-${sessionId}`, JSON.stringify(payload));
   syncChannel?.postMessage(payload);
@@ -588,6 +659,7 @@ app.addEventListener('submit', (event) => {
     const url = new URL(window.location.href);
     url.searchParams.set('mode', 'result');
     url.searchParams.set('avatar', state.profileId);
+    url.searchParams.set('height', state.heightBand);
     url.searchParams.set('color', '0');
     url.searchParams.set('expires', String(Date.now() + 30 * 60 * 1000));
     window.location.replace(url);
