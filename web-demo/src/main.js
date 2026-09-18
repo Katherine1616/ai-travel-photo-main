@@ -16,6 +16,8 @@ const icons = {
 };
 const params = new URLSearchParams(window.location.search);
 const mobileRoute = params.get('screen') === 'mobile';
+const sessionId = params.get('session') || crypto.randomUUID().slice(0, 8);
+const syncChannel = 'BroadcastChannel' in window ? new BroadcastChannel('forme-fitting-demo') : null;
 
 const state = {
   page: mobileRoute ? 'mobile' : 'catalog',
@@ -53,6 +55,26 @@ function currentColor() {
   return currentProduct().colors[state.colorIndex] || currentProduct().colors[0];
 }
 
+function applyPhoneProfile(payload) {
+  if (!payload || payload.sessionId !== sessionId || mobileRoute) return;
+  state.profileId = payload.profileId;
+  state.heightBand = payload.heightBand;
+  state.phoneComplete = true;
+  if (state.page === 'phone-wait') {
+    setPage('confirm');
+    toast('手机填写已完成');
+  }
+}
+
+syncChannel?.addEventListener('message', (event) => applyPhoneProfile(event.data));
+window.addEventListener('storage', (event) => {
+  if (event.key === `forme-fitting-${sessionId}` && event.newValue) {
+    applyPhoneProfile(JSON.parse(event.newValue));
+  }
+});
+const savedPhoneProfile = localStorage.getItem(`forme-fitting-${sessionId}`);
+if (savedPhoneProfile) applyPhoneProfile(JSON.parse(savedPhoneProfile));
+
 function currentProfile() {
   return avatarProfiles.find((profile) => profile.id === state.profileId) || avatarProfiles[4];
 }
@@ -80,13 +102,6 @@ function toast(message) {
   }, 2400);
 }
 
-function stockText(stock) {
-  const total = Object.values(stock).reduce((sum, amount) => sum + amount, 0);
-  if (total === 0) return '本店缺货';
-  if (total <= 4) return `仅余 ${total} 件`;
-  return '本店有货';
-}
-
 function profileFromQuick() {
   const exact = avatarProfiles.find((profile) => profile.build === state.quick.build && profile.shape === state.quick.shape);
   return exact || avatarProfiles[4];
@@ -109,11 +124,11 @@ function flowHeader(active = 1) {
   return `
     <header class="kiosk-header">
       <button class="brand" data-action="home" aria-label="返回商品首页">
-        <span class="brand-mark">LM</span>
-        <span><strong>蓝梅</strong><small>AI 虚拟试衣镜</small></span>
+        <span class="brand-mark">F</span>
+        <span><strong>FORME</strong><small>VIRTUAL FITTING STUDIO</small></span>
       </button>
       <ol class="flow-steps" aria-label="试衣步骤">
-        ${steps.map((step, index) => `<li class="${index + 1 <= active ? 'active' : ''}"><b>${index + 1}</b><span>${step}</span></li>`).join('')}
+        ${steps.map((step, index) => `<li class="${index + 1 === active ? 'active' : ''}"><b>0${index + 1}</b><span>${step}</span></li>`).join('')}
       </ol>
       <div class="header-actions">
         <button class="icon-btn" data-action="privacy" title="隐私说明">${icon('shield-check')}</button>
@@ -134,62 +149,54 @@ function renderCatalog() {
   const filtered = state.category === '全部' ? products : products.filter((product) => product.category === state.category);
   const product = currentProduct();
   return `
-    <div class="kiosk-page with-dock">
+    <div class="kiosk-page catalog-page">
       ${flowHeader(1)}
-      <main class="catalog-layout">
-        <aside class="catalog-sidebar">
-          <p class="eyebrow">红河水乡店 · 1F 中庭</p>
-          <h1>今天想试哪一件？</h1>
-          <p>先看款式和轮廓，不需要上传照片或登录账号。</p>
-          <nav class="category-nav" aria-label="服装分类">
-            ${categories.map((category) => `<button class="${state.category === category ? 'active' : ''}" data-category="${category}"><span>${category}</span><b>${category === '全部' ? products.length : products.filter((item) => item.category === category).length}</b></button>`).join('')}
-          </nav>
-          <div class="privacy-note">${icon('shield-check', 24)}<div><strong>匿名体验</strong><span>无摄像头，不采集真人照片</span></div></div>
-        </aside>
-        <section class="product-browser">
-          <div class="section-title"><div><p class="eyebrow">本店在售</p><h2>${state.category === '全部' ? '精选款式' : state.category}</h2></div><span>${filtered.length} 件可试</span></div>
+      <main class="catalog-stage">
+        <section class="catalog-hero">
+          <img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt="${product.name}">
+          <div class="hero-index">LOOK ${String(products.findIndex((item) => item.id === product.id) + 1).padStart(2, '0')}</div>
+          <div class="hero-copy"><p>${product.category} / ${product.badge}</p><h1>${product.name}</h1><span>${product.subtitle}</span><strong>${money(product.price)}</strong><button class="primary-btn hero-action" data-action="start">开始试穿 ${icon('arrow-right', 26)}</button></div>
+        </section>
+        <section class="catalog-panel">
+          <div class="catalog-prompt"><p>FORME CENTRAL / TODAY'S EDIT</p><h2>选一套，看看<br>上身效果</h2></div>
+          <nav class="category-nav" aria-label="服装分类">${categories.map((category) => `<button class="${state.category === category ? 'active' : ''}" data-category="${category}">${category}</button>`).join('')}</nav>
           <div class="product-grid">
             ${filtered.map((item) => `
               <button class="product-card ${item.id === state.productId ? 'selected' : ''}" data-product="${item.id}">
-                <span class="product-image"><img src="${item.colors[0].image}" alt="${item.name}" loading="lazy"><em>${item.badge}</em></span>
-                <span class="product-copy"><span><strong>${item.name}</strong><small>${item.subtitle}</small></span><b>${money(item.price)}</b></span>
+                <span class="product-image"><img src="${item.colors[0].url}" style="object-position:${item.colors[0].position}" alt="${item.name}" loading="lazy"></span>
+                <span class="product-copy"><strong>${item.name}</strong><small>${money(item.price)}</small></span>
               </button>`).join('')}
           </div>
+          <div class="privacy-note">${icon('shield-check', 22)}<span>无需照片或账号，本次体验结束后自动清除</span></div>
         </section>
       </main>
-      <div class="selection-dock">
-        <img src="${product.colors[0].image}" alt="">
-        <div><span>已选款式</span><strong>${product.name}</strong></div>
-        <div class="dock-stock"><i></i>${stockText(product.stock)}</div>
-        <button class="primary-btn" data-action="start">创建我的虚拟形象 ${icon('arrow-right')}</button>
-      </div>
     </div>`;
 }
 
 function renderAvatarChoice() {
   return `
     <div class="kiosk-page">
-      ${backBar('创建匿名虚拟形象', '选择更适合你的输入方式，参数仅用于本次体验。')}
+      ${backBar('创建虚拟形象', '选择一种方式开始，稍后仍可返回调整。')}
       <main class="choice-stage">
         <section class="choice-intro">
-          <p class="eyebrow">两种方式，结果都会离散化</p>
-          <h2>你想怎么开始？</h2>
-          <p>大屏只保留体型标签；精确数值在确认后不再展示，也不会进入订单或会员信息。</p>
+          <p class="eyebrow">CREATE YOUR FIT</p>
+          <h2>选择创建方式</h2>
+          <p>用最顺手的方式完成虚拟形象，整个过程不需要上传真人照片。</p>
         </section>
         <div class="choice-grid">
           <button class="choice-option recommended" data-action="quick">
             <span class="choice-visual quick-visual"><i></i><i></i><i></i></span>
             <span class="choice-tag">推荐 · 约 20 秒</span>
-            <strong>快速匹配</strong>
-            <span>直接在大屏选择身高范围、整体体型和身体比例。</span>
+            <strong>快速选择</strong>
+            <span>在大屏选择身高范围与基础身形。</span>
             <b>在大屏开始 ${icon('arrow-right')}</b>
           </button>
           <button class="choice-option" data-action="precise">
             <span class="choice-visual phone-visual">${icon('smartphone', 56)}<i>${icon('ruler', 24)}</i></span>
             <span class="choice-tag neutral">约 1 分钟</span>
-            <strong>精细定制</strong>
-            <span>扫码在手机输入身高、体重和胸腰臀，减少公共场合暴露。</span>
-            <b>用手机填写 ${icon('qr-code')}</b>
+            <strong>手机填写</strong>
+            <span>扫码填写身高、体重与围度。</span>
+            <b>扫码填写 ${icon('qr-code')}</b>
           </button>
         </div>
       </main>
@@ -204,19 +211,19 @@ function renderQuick() {
   const preview = profileFromQuick();
   return `
     <div class="kiosk-page">
-      ${backBar('快速匹配', '不用输入具体数值，选择最接近你的轮廓。')}
+      ${backBar('选择基础身形', '选择最接近你的选项，效果生成后仍可调整。')}
       <main class="split-stage quick-stage">
         <section class="form-panel">
           <div class="field-block"><label>身高范围</label>${segmented('height', ['150–159 cm', '160–169 cm', '170 cm 以上'])}</div>
           <div class="field-block"><label>整体体型</label>${segmented('build', ['偏瘦', '标准', '丰满'])}</div>
           <div class="field-block"><label>身体比例</label>${segmented('shape', ['直筒型', '曲线型', '梨型'])}</div>
           <p class="inline-note">${icon('info', 18)} 不确定也没关系，稍后可以随时调整并重新生成。</p>
-          <button class="primary-btn wide" data-action="confirm-quick">使用这个轮廓 ${icon('arrow-right')}</button>
+          <button class="primary-btn wide" data-action="confirm-quick">继续 ${icon('arrow-right')}</button>
         </section>
         <section class="avatar-preview">
-          <span class="preview-label">匿名轮廓预览</span>
-          <img src="${preview.image}" alt="${preview.label}">
-          <div><strong>${preview.label}</strong><span>${state.quick.height} · ${state.quick.build} · ${state.quick.shape}</span></div>
+          <span class="preview-label">形象预览</span>
+          <img src="${preview.image}" alt="虚拟形象预览">
+          <div><strong>你的虚拟形象</strong><span>预览会随选择更新</span></div>
         </section>
       </main>
     </div>`;
@@ -225,22 +232,18 @@ function renderQuick() {
 function renderPhoneWait() {
   return `
     <div class="kiosk-page">
-      ${backBar('在手机上精细定制', '输入过程不在公共大屏显示，完成后只同步匿名轮廓。')}
+      ${backBar('使用手机填写', '扫描二维码，在手机上完成身形设置。')}
       <main class="phone-handoff">
         <section class="handoff-copy">
-          <span class="step-number">01</span><h2>微信扫码</h2><p>在手机页输入身高、体重与胸腰臀数据。</p>
-          <span class="step-number">02</span><h2>确认并同步</h2><p>系统会映射为离散体型标签，大屏不显示具体数值。</p>
+          <p class="eyebrow">CONTINUE ON PHONE</p>
+          <h1>拿出手机<br>继续创建</h1>
+          <p>填写完成后将直接进入手机商品页。</p>
+          <div class="phone-steps"><span><b>01</b> 扫描二维码</span><span><b>02</b> 填写并确认</span><span><b>03</b> 查看试穿商品</span></div>
         </section>
         <section class="qr-panel">
           <div class="qr-frame"><canvas class="js-qr" data-qr="${mobileUrl('avatar')}"></canvas></div>
-          <strong>扫码打开手机填写页</strong><span>二维码 10 分钟内有效</span>
-          <button class="text-btn" data-action="simulate-phone">在此模拟手机填写 ${icon('external-link', 16)}</button>
-        </section>
-        <section class="sync-panel ${state.phoneComplete ? 'complete' : ''}">
-          <span class="sync-icon">${state.phoneComplete ? icon('check', 38) : icon('smartphone', 38)}</span>
-          <h2>${state.phoneComplete ? '参数已同步' : '等待手机确认'}</h2>
-          <p>${state.phoneComplete ? '具体数值已转换为匿名轮廓，大屏未保存原始参数。' : '手机完成后，这里会自动继续。'}</p>
-          ${state.phoneComplete ? '<button class="primary-btn" data-action="continue-confirm">查看匿名轮廓</button>' : '<span class="waiting"><i></i><i></i><i></i></span>'}
+          <strong>扫码打开填写页</strong><span>二维码 10 分钟内有效</span>
+          <button class="secondary-btn demo-phone-btn" data-action="simulate-phone">演示手机联动 ${icon('external-link', 18)}</button>
         </section>
       </main>
     </div>`;
@@ -253,12 +256,12 @@ function renderPreciseForm(inPhone = false) {
   ];
   return `
     <form class="precise-form" data-form="precise">
-      <div class="form-lead"><span>${icon('shield-check', 22)}</span><div><strong>仅用于本次轮廓匹配</strong><p>确认后原始数值不会在大屏展示或写入会员资料。</p></div></div>
+      <div class="form-lead"><span>${icon('shield-check', 22)}</span><div><strong>本次体验结束后自动清除</strong><p>我们不会把身体数据写入会员或订单。</p></div></div>
       <div class="measure-grid">
         ${fields.map(([key, label, unit, min, max]) => `<label><span>${label}</span><span class="input-unit"><input name="${key}" type="number" min="${min}" max="${max}" value="${state.precise[key]}" required><b>${unit}</b></span></label>`).join('')}
       </div>
       <label class="consent"><input type="checkbox" required checked><span>我已了解：AI 效果仅供款式与轮廓参考，不代表实际尺码和合身度。</span></label>
-      <button class="primary-btn wide" type="submit">确认并生成匿名轮廓 ${icon(inPhone ? 'send' : 'arrow-right')}</button>
+      <button class="primary-btn wide" type="submit">确认并继续 ${icon(inPhone ? 'send' : 'arrow-right')}</button>
     </form>`;
 }
 
@@ -267,15 +270,14 @@ function renderConfirm() {
   const profile = currentProfile();
   return `
     <div class="kiosk-page">
-      ${backBar('确认人物轮廓', '看起来不合适可以返回调整，生成后也能重新匹配。')}
+      ${backBar('准备试穿', '确认形象与服装后开始生成。')}
       <main class="split-stage confirm-stage">
-        <section class="avatar-preview large"><span class="preview-label">匿名虚拟形象</span><img src="${profile.image}" alt="${profile.label}"></section>
+        <section class="avatar-preview large"><span class="preview-label">虚拟形象</span><img src="${profile.image}" alt="虚拟形象"></section>
         <section class="confirm-copy">
-          <p class="eyebrow">已完成离散化匹配</p><h2>${profile.label}</h2>
-          <div class="profile-tags"><span>${state.heightBand}</span><span>${profile.build}</span><span>${profile.shape}</span><span>参数已隐藏</span></div>
-          <div class="outfit-row"><img src="${product.colors[0].image}" alt=""><div><small>即将试穿</small><strong>${product.name}</strong><span>${currentColor().name} · ${money(product.price)}</span></div></div>
-          <p class="inline-note">${icon('shield-check', 18)} 不使用摄像头，不上传真人照片；会话结束后自动清除。</p>
-          <div class="button-row"><button class="secondary-btn" data-action="adjust">调整轮廓</button><button class="primary-btn" data-action="generate">开始 AI 试穿 ${icon('sparkles')}</button></div>
+          <p class="eyebrow">READY TO TRY ON</p><h2>形象已准备好</h2>
+          <div class="outfit-row"><img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt=""><div><small>即将试穿</small><strong>${product.name}</strong><span>${currentColor().name} · ${money(product.price)}</span></div></div>
+          <p class="inline-note">${icon('shield-check', 18)} 无需照片。AI 效果仅供款式和整体轮廓参考。</p>
+          <div class="button-row"><button class="secondary-btn" data-action="adjust">重新选择</button><button class="primary-btn" data-action="generate">开始生成 ${icon('sparkles')}</button></div>
         </section>
       </main>
     </div>`;
@@ -291,7 +293,7 @@ function renderProcessing() {
     <div class="kiosk-page processing-page">
       ${flowHeader(3)}
       <main class="processing-stage">
-        <section class="scan-preview"><img src="${product.colors[state.colorIndex].image}" alt="${product.name}"><span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
+        <section class="scan-preview"><img src="${product.colors[state.colorIndex].url}" style="object-position:${product.colors[state.colorIndex].position}" alt="${product.name}"><span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
         <section class="processing-copy">
           <p class="eyebrow">预计还需 ${Math.max(1, Math.ceil((100 - state.progress) / 20))} 秒</p>
           <h1>正在把 ${product.name}<br>适配到你的虚拟形象</h1>
@@ -314,6 +316,7 @@ function mobileUrl(mode) {
   url.searchParams.set('screen', 'mobile');
   url.searchParams.set('mode', mode);
   url.searchParams.set('product', state.productId);
+  url.searchParams.set('session', sessionId);
   if (mode === 'result') {
     url.searchParams.set('color', String(state.colorIndex));
     url.searchParams.set('avatar', state.profileId);
@@ -325,15 +328,15 @@ function mobileUrl(mode) {
 function renderResult() {
   const product = currentProduct();
   const profile = currentProfile();
-  const image = state.compare === 'result' ? currentColor().image : profile.image;
+  const image = state.compare === 'result' ? currentColor().url : profile.image;
   const sizes = Object.entries(product.stock);
   return `
     <div class="kiosk-page result-page">
       ${flowHeader(4)}
       <main class="result-layout">
         <section class="result-visual">
-          <div class="compare-control"><button class="${state.compare === 'avatar' ? 'active' : ''}" data-compare="avatar">人物轮廓</button><button class="${state.compare === 'result' ? 'active' : ''}" data-compare="result">试穿效果</button></div>
-          <img src="${image}" alt="${state.compare === 'result' ? product.name : profile.label}">
+          <div class="compare-control"><button class="${state.compare === 'avatar' ? 'active' : ''}" data-compare="avatar">试穿前</button><button class="${state.compare === 'result' ? 'active' : ''}" data-compare="result">试穿效果</button></div>
+          <img src="${image}" style="object-position:${state.compare === 'result' ? currentColor().position : 'center'}" alt="${state.compare === 'result' ? product.name : '虚拟形象'}">
           <span class="result-disclaimer">AI 效果仅供款式与轮廓参考</span>
         </section>
         <section class="result-details">
@@ -363,23 +366,22 @@ function renderFailure(type) {
           <button class="secondary-btn" data-action="change-product">换一件商品</button>
           <button class="secondary-btn" data-action="product-qr">扫码看商品</button>
         </div>
-        <span class="scenario-note">Demo 设置中可切换成功、失败与超时状态</span>
       </main>
     </div>`;
 }
 
 function renderMobile() {
   if (state.mobileMode === 'avatar') {
-    return `<div class="mobile-page"><header class="mobile-header"><span class="brand-mark">LM</span><div><strong>蓝梅虚拟试衣</strong><small>匿名参数填写</small></div></header><main class="mobile-content"><p class="eyebrow">精细定制</p><h1>${state.phoneComplete ? '匿名轮廓已同步' : '填写身体参数'}</h1>${state.phoneComplete ? `<div class="mobile-success"><span>${icon('check', 34)}</span><h2>${currentProfile().label}</h2><p>原始数值已完成离散化映射。请返回大屏继续体验。</p></div>` : renderPreciseForm(true)}</main><footer class="mobile-privacy">${icon('shield-check', 16)} 原始参数仅用于本次匹配，不进入订单或会员资料</footer></div>`;
+    return `<div class="mobile-page"><header class="mobile-header"><span class="brand-mark">F</span><div><strong>FORME</strong><small>VIRTUAL FITTING</small></div></header><main class="mobile-content"><p class="eyebrow">CREATE YOUR FIT</p><h1>填写身体参数</h1>${renderPreciseForm(true)}</main><footer class="mobile-privacy">${icon('shield-check', 16)} 本次体验结束后自动清除</footer></div>`;
   }
   const product = currentProduct();
   const color = currentColor();
   const expired = Number(params.get('expires')) < Date.now();
-  if (expired) return `<div class="mobile-page"><main class="mobile-empty"><span>${icon('clock-3', 36)}</span><h1>试穿结果已失效</h1><p>为保护隐私，匿名结果仅短期保留。请回到门店大屏重新试穿。</p></main></div>`;
+  if (expired) return `<div class="mobile-page"><main class="mobile-empty"><span>${icon('clock-3', 36)}</span><h1>试穿结果已失效</h1><p>为保护隐私，试穿结果仅短期保留。请回到门店大屏重新试穿。</p></main></div>`;
   return `
     <div class="mobile-page result-mobile">
-      <header class="mobile-header"><span class="brand-mark">LM</span><div><strong>蓝梅虚拟试衣</strong><small>红河水乡店</small></div><button class="icon-btn" data-action="favorite" title="收藏">${icon('heart')}</button></header>
-      <main class="mobile-content no-top"><div class="mobile-result-image"><img src="${color.image}" alt="${product.name}"><span>AI 试穿效果</span></div>
+      <header class="mobile-header"><span class="brand-mark">F</span><div><strong>FORME</strong><small>CENTRAL STORE</small></div><button class="icon-btn" data-action="favorite" title="收藏">${icon('heart')}</button></header>
+      <main class="mobile-content no-top"><div class="mobile-result-image"><img src="${color.url}" style="object-position:${color.position}" alt="${product.name}"><span>AI 试穿效果</span></div>
         <section class="mobile-product"><p>${product.category} · ${color.name}</p><h1>${product.name}</h1><strong>${money(product.price)}</strong><span>${product.subtitle}</span></section>
         <section class="mobile-section"><div class="mobile-section-title"><h2>选择尺码</h2><button data-action="size-help">尺码建议</button></div><div class="mobile-sizes">${Object.entries(product.stock).map(([size, count]) => `<button class="${state.selectedSize === size ? 'active' : ''} ${count === 0 ? 'soldout' : ''}" data-size="${size}" ${count === 0 ? 'disabled' : ''}><b>${size}</b><span>${count ? `${count} 件` : '缺货'}</span></button>`).join('')}</div></section>
         <section class="mobile-section"><h2>怎么带走</h2><div class="fulfilment-list"><button data-fulfilment="pickup">${icon('shopping-bag')}<span><strong>本店购买，立即取货</strong><small>选择后锁定 10 分钟</small></span>${icon('chevron-right')}</button><button data-fulfilment="fitting">${icon('door-open')}<span><strong>保留商品，进店试穿</strong><small>出示预约码，店员备货</small></span>${icon('chevron-right')}</button><button data-fulfilment="delivery">${icon('truck')}<span><strong>线上配送</strong><small>预计 2–3 天送达</small></span>${icon('chevron-right')}</button><button data-fulfilment="transfer">${icon('map-pin')}<span><strong>附近门店 / 跨店取货</strong><small>${stores[1].name} 有货</small></span>${icon('chevron-right')}</button></div></section>
@@ -390,20 +392,20 @@ function renderMobile() {
 
 function renderSettings() {
   if (state.modal !== 'settings') return '';
-  return `<div class="modal-backdrop" data-dismiss-modal><section class="dialog" role="dialog" aria-modal="true"><button class="dialog-close" data-action="close-modal">${icon('x')}</button><p class="eyebrow">演示控制台</p><h2>选择生成结果</h2><p>用于向面试官快速展示等待、失败和超时处理。</p><div class="scenario-list">${[['success','正常成功','约 5 秒进入结果页'],['failure','生成失败','展示自动重试后的兜底'],['timeout','生成超时','展示扫码到手机等待']].map(([value,title,copy]) => `<button class="${state.scenario === value ? 'active' : ''}" data-scenario="${value}"><span>${state.scenario === value ? icon('check') : ''}</span><div><strong>${title}</strong><small>${copy}</small></div></button>`).join('')}</div><button class="primary-btn wide" data-action="close-modal">完成</button></section></div>`;
+  return `<div class="modal-backdrop" data-dismiss-modal><section class="dialog" role="dialog" aria-modal="true"><button class="dialog-close" data-action="close-modal">${icon('x')}</button><p class="eyebrow">DEMO STATES</p><h2>选择生成状态</h2><div class="scenario-list">${[['success','正常成功','约 5 秒进入结果页'],['failure','生成失败','查看失败后的处理方式'],['timeout','生成超时','查看等待超时状态']].map(([value,title,copy]) => `<button class="${state.scenario === value ? 'active' : ''}" data-scenario="${value}"><span>${state.scenario === value ? icon('check') : ''}</span><div><strong>${title}</strong><small>${copy}</small></div></button>`).join('')}</div><button class="primary-btn wide" data-action="close-modal">完成</button></section></div>`;
 }
 
 function renderActionModal() {
   const copy = {
-    privacy: ['隐私说明', '无需照片或账号。身体参数仅用于本次形象生成，结束后自动删除；二维码只包含短期匿名会话信息。'],
-    'store-buy': ['本店购买', '选择尺码后将模拟锁定库存 10 分钟，并生成到店取货码。'],
+    privacy: ['隐私说明', '无需照片或账号。身体参数仅用于本次形象生成，结束后自动删除；二维码只包含短期会话信息。'],
+    'store-buy': ['本店购买', '选择尺码后可保留库存 10 分钟，并生成到店取货码。'],
     'product-qr': ['扫码查看商品', '手机端可查看商品信息和模拟库存，不需要重新生成试穿效果。'],
-    favorite: ['已收藏试穿结果', 'Demo 不会真正写入账号；正式流程会在此请求登录授权。'],
-    'size-help': ['尺码建议', '本 Demo 不根据身体参数推荐真实尺码。请选择常穿尺码，并以到店试穿为准。'],
-    pickup: ['本店取货', '已模拟锁定所选尺码 10 分钟。正式版会生成取货码并在支付前再次校验库存。'],
+    favorite: ['已收藏试穿结果', '登录后可以长期保存，并在其他设备继续查看。'],
+    'size-help': ['尺码建议', '请选择常穿尺码，并以到店试穿结果为准。'],
+    pickup: ['本店取货', '已保留所选尺码 10 分钟，支付前会再次确认库存。'],
     fitting: ['预约试穿', '商品会模拟保留 10 分钟。到店后向店员出示预约码即可试穿。'],
-    delivery: ['线上配送', '收货地址和支付会在正式交易页填写，本 Demo 不收集个人信息。'],
-    transfer: ['跨店取货', `${stores[1].name} 显示有货。正式版会再次校验该门店库存。`],
+    delivery: ['线上配送', '下一步可填写收货地址并选择支付方式。'],
+    transfer: ['跨店取货', `${stores[1].name} 显示有货，确认后将为你保留。`],
     checkout: ['确认购买', state.selectedSize ? `已选择 ${state.selectedSize} 码。这里将进入支付，Demo 到此结束。` : '请先选择一个有货尺码，再进入购买流程。'],
   };
   if (!copy[state.modal]) return '';
@@ -414,7 +416,7 @@ function renderActionModal() {
 
 function renderPhoneModal() {
   if (state.modal !== 'phone') return '';
-  return `<div class="modal-backdrop phone-backdrop" data-dismiss-modal><section class="phone-simulator" role="dialog" aria-modal="true"><div class="phone-top"><span>9:41</span><i></i><button data-action="close-modal">${icon('x', 18)}</button></div><header><span class="brand-mark">LM</span><div><strong>蓝梅虚拟试衣</strong><small>精细定制</small></div></header><main><h2>填写身体参数</h2><p>确认后将转换为匿名轮廓。</p>${renderPreciseForm(true)}</main></section></div>`;
+  return `<div class="modal-backdrop phone-backdrop" data-dismiss-modal><section class="phone-simulator" role="dialog" aria-modal="true"><div class="phone-top"><span>9:41</span><i></i><button data-action="close-modal">${icon('x', 18)}</button></div><header><span class="brand-mark">F</span><div><strong>FORME</strong><small>VIRTUAL FITTING</small></div></header><main><h2>填写身体参数</h2><p>确认后将继续到试穿页面。</p>${renderPreciseForm(true)}</main></section></div>`;
 }
 
 function render() {
@@ -538,7 +540,7 @@ app.addEventListener('click', (event) => {
   if (action === 'back') return handleBack();
   if (action === 'start') return setPage('avatar-choice');
   if (action === 'quick') return setPage('quick');
-  if (action === 'precise') return setPage('phone-wait');
+  if (action === 'precise') return setPage(state.phoneComplete ? 'confirm' : 'phone-wait');
   if (action === 'confirm-quick') {
     state.profileId = profileFromQuick().id;
     state.heightBand = state.quick.height;
@@ -579,13 +581,20 @@ app.addEventListener('submit', (event) => {
   state.heightBand = values.height < 160 ? '150–159 cm' : values.height >= 170 ? '170 cm 以上' : '160–169 cm';
   state.profileId = profileFromInputs(values).id;
   state.phoneComplete = true;
+  const payload = { sessionId, profileId: state.profileId, heightBand: state.heightBand };
+  localStorage.setItem(`forme-fitting-${sessionId}`, JSON.stringify(payload));
+  syncChannel?.postMessage(payload);
   if (mobileRoute) {
-    render();
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'result');
+    url.searchParams.set('avatar', state.profileId);
+    url.searchParams.set('color', '0');
+    url.searchParams.set('expires', String(Date.now() + 30 * 60 * 1000));
+    window.location.replace(url);
   } else {
     state.modal = '';
-    state.page = 'phone-wait';
-    render();
-    toast('手机参数已转换并同步');
+    setPage('confirm');
+    toast('手机填写已完成');
   }
 });
 

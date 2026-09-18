@@ -1,12 +1,12 @@
-# 蓝梅 AI 虚拟试衣 Demo
+# FORME AI 虚拟试衣 Demo
 
-面向商场门店大屏的 AI 虚拟试衣产品原型。仓库保留原微信小程序、Node.js 服务端与管理后台，并新增可独立运行的网页 Demo。
+面向商场门店横向大屏的 AI 虚拟试衣网页原型。`web-demo/` 是独立的 Vite Web 应用，不依赖微信小程序运行环境。
 
 ## Structure
 
-- `miniprogram/`: 微信小程序源码
-- `server/`: Express + TypeScript + SQLite 后端
-- `web-demo/`: 大屏与手机承接网页 Demo
+- `miniprogram/`: 历史原型源码，不参与网页 Demo 构建
+- `server/`: 历史服务端，不参与当前静态 Demo
+- `web-demo/`: 大屏与手机承接网页 Demo，可部署到 Vercel
 - `docs/product-brief.md`: 一页产品方案
 - `docs/ai-tool-notes.md`: AI 工具、提示词和人工修改说明
 
@@ -20,7 +20,11 @@ npm run dev
 
 生产构建：`npm run build`。
 
-网页 Demo 使用前端状态和静态数据模拟 AI 生成、库存、锁货、跨店取货与支付承接，不接真实数据库或交易系统。二维码只携带商品、颜色、离散画像和过期时间，不包含原始身体参数。
+网页 Demo 使用前端状态和静态数据模拟 AI 生成、库存、锁货、跨店取货与支付承接，不接真实数据库或交易系统。手机提交后直接进入商品承接页；同浏览器标签页通过 `BroadcastChannel` 演示大屏联动，真实跨设备同步需要后端会话服务。
+
+## Deploy to Vercel
+
+在 Vercel 中将 Root Directory 设置为 `web-demo`。项目已包含 `vercel.json`，构建命令为 `npm run build`，输出目录为 `dist`。
 
 ## Notes
 

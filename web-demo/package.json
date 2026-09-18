@@ -1,12 +1,11 @@
 {
-  "name": "ai-travel-tryon-demo",
+  "name": "forme-virtual-fitting-demo",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "export:data": "node scripts/export-data.js",
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build && node scripts/prepare-sites-dist.js",
+    "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
