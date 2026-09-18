@@ -9,7 +9,10 @@
     "build": "vite build && node scripts/prepare-sites-dist.js",
     "preview": "vite preview --host 0.0.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "lucide": "^1.47.0",
+    "qrcode": "^1.5.4"
+  },
   "devDependencies": {
     "vite": "^5.4.19"
   }
