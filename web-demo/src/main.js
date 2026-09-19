@@ -37,6 +37,7 @@ const state = {
   toast: '',
   phoneComplete: false,
   profileReady: Boolean(params.get('avatar')),
+  resultReady: mobileRoute && params.get('mode') === 'result',
   changingProduct: false,
 };
 
@@ -62,6 +63,7 @@ function applyPhoneProfile(payload) {
   state.heightBand = payload.heightBand;
   state.phoneComplete = true;
   state.profileReady = true;
+  state.resultReady = false;
   if (state.page === 'phone-wait') {
     setPage('confirm');
     toast('手机填写已完成');
@@ -260,7 +262,10 @@ function flowHeader(active = 1) {
         <span><strong>FORME</strong><small>VIRTUAL FITTING STUDIO</small></span>
       </button>
       <ol class="flow-steps" aria-label="试衣步骤">
-        ${steps.map((step, index) => `<li class="${index + 1 === active ? 'active' : ''}"><b>0${index + 1}</b><span>${step}</span></li>`).join('')}
+        ${steps.map((step, index) => {
+          const stepNumber = index + 1;
+          return `<li class="${stepNumber === active ? 'active' : ''}"><button data-flow-step="${stepNumber}" ${stepNumber === active ? 'aria-current="step"' : ''}><b>0${stepNumber}</b><span>${step}</span></button></li>`;
+        }).join('')}
       </ol>
       <div class="header-actions">
         <button class="icon-btn" data-action="privacy" title="隐私说明">${icon('shield-check')}</button>
@@ -588,6 +593,7 @@ async function hydrateQrCodes() {
 function startGeneration() {
   state.page = 'processing';
   state.progress = 8;
+  state.resultReady = false;
   render();
   window.clearInterval(processTimer);
   processTimer = window.setInterval(() => {
@@ -599,6 +605,7 @@ function startGeneration() {
         else if (state.scenario === 'timeout') setPage('timeout');
         else {
           state.resultSeconds = 45;
+          state.resultReady = true;
           setPage('result');
           startCountdown();
         }
@@ -616,6 +623,7 @@ function startCountdown() {
       state.profileId = 'standard-curved';
       state.colorIndex = 0;
       state.profileReady = false;
+      state.resultReady = false;
       state.changingProduct = false;
       setPage('catalog');
       toast('会话已结束，数据已清除');
@@ -630,16 +638,41 @@ function handleBack() {
   setPage(previous[state.page] || 'catalog');
 }
 
+function handleFlowStep(step) {
+  if (step === 1) {
+    state.changingProduct = state.profileReady;
+    return setPage('catalog');
+  }
+  if (step === 2) {
+    state.changingProduct = false;
+    return setPage('avatar-choice');
+  }
+  if (!state.profileReady) {
+    setPage('avatar-choice');
+    return toast('请先创建虚拟形象');
+  }
+  if (step === 3) return setPage('confirm');
+  if (step === 4 && state.resultReady) {
+    setPage('result');
+    return startCountdown();
+  }
+  setPage('confirm');
+  return toast('请先完成 AI 生成');
+}
+
 app.addEventListener('click', (event) => {
   if (event.target.matches('[data-dismiss-modal]')) {
     state.modal = '';
     return render();
   }
+  const flowStep = event.target.closest('[data-flow-step]');
+  if (flowStep) return handleFlowStep(Number(flowStep.dataset.flowStep));
   const productButton = event.target.closest('[data-product]');
   if (productButton) {
     state.productId = productButton.dataset.product;
     state.colorIndex = 0;
     state.selectedSize = '';
+    state.resultReady = false;
     return render();
   }
   const category = event.target.closest('[data-category]');
@@ -703,6 +736,7 @@ app.addEventListener('click', (event) => {
     state.profileId = profileFromQuick().id;
     state.heightBand = state.quick.height;
     state.profileReady = true;
+    state.resultReady = false;
     return setPage('confirm');
   }
   if (action === 'simulate-phone') {
@@ -723,6 +757,7 @@ app.addEventListener('click', (event) => {
     state.profileId = 'standard-curved';
     state.colorIndex = 0;
     state.profileReady = false;
+    state.resultReady = false;
     state.changingProduct = false;
     setPage('catalog');
     return toast('本次体验数据已清除');
@@ -747,6 +782,7 @@ app.addEventListener('submit', (event) => {
   state.profileId = profileFromInputs(values).id;
   state.phoneComplete = true;
   state.profileReady = true;
+  state.resultReady = false;
   const payload = { sessionId, profileId: state.profileId, heightBand: state.heightBand };
   localStorage.setItem(`forme-fitting-${sessionId}`, JSON.stringify(payload));
   syncChannel?.postMessage(payload);
