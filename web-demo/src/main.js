@@ -629,11 +629,7 @@ app.addEventListener('click', (event) => {
     state.colorIndex = 0;
     state.selectedSize = '';
     state.resultReady = false;
-    if (state.profileReady) {
-      state.changingProduct = false;
-      return startGeneration();
-    }
-    return setPage('quick');
+    return render();
   }
   const category = event.target.closest('[data-category]');
   if (category) {
