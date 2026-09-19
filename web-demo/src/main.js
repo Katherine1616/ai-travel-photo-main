@@ -38,6 +38,7 @@ const state = {
   phoneComplete: false,
   profileReady: Boolean(params.get('avatar')),
   resultReady: mobileRoute && params.get('mode') === 'result',
+  usingExampleProfile: false,
   changingProduct: false,
 };
 
@@ -64,9 +65,9 @@ function applyPhoneProfile(payload) {
   state.phoneComplete = true;
   state.profileReady = true;
   state.resultReady = false;
+  state.usingExampleProfile = false;
   if (state.page === 'phone-wait') {
-    setPage('confirm');
-    toast('手机填写已完成');
+    startGeneration();
   }
 }
 
@@ -292,7 +293,7 @@ function renderCatalog() {
         <section class="catalog-hero">
           <img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt="${product.name}">
           <div class="hero-index">LOOK ${String(products.findIndex((item) => item.id === product.id) + 1).padStart(2, '0')}</div>
-          <div class="hero-copy"><p>${product.category} / ${product.badge}</p><h1>${product.name}</h1><span>${product.subtitle}</span><strong>${money(product.price)}</strong><button class="primary-btn hero-action" data-action="start">${state.changingProduct ? '使用当前形象试穿' : '开始试穿'} ${icon('arrow-right', 26)}</button></div>
+          <div class="hero-copy"><p>${product.category} / ${product.badge}</p><h1>${product.name}</h1><span>${product.subtitle}</span><strong>${money(product.price)}</strong><div class="hero-actions"><button class="primary-btn hero-action" data-action="start">${state.profileReady ? '使用当前形象试穿' : '创建我的形象'} ${icon('arrow-right', 24)}</button>${state.profileReady ? '' : `<button class="hero-preview-action" data-action="sample-try">${icon('sparkles', 17)} 先看示例效果</button>`}</div></div>
         </section>
         <section class="catalog-panel">
           <div class="catalog-prompt"><p>${state.changingProduct ? 'CURRENT FIT / KEEP YOUR AVATAR' : "FORME CENTRAL / TODAY'S EDIT"}</p><h2>${state.changingProduct ? '换一件，继续<br>使用当前形象' : '选一套，看看<br>上身效果'}</h2></div>
@@ -310,36 +311,6 @@ function renderCatalog() {
     </div>`;
 }
 
-function renderAvatarChoice() {
-  return `
-    <div class="kiosk-page">
-      ${backBar('创建虚拟形象', '选择一种方式开始，稍后仍可返回调整。')}
-      <main class="choice-stage">
-        <section class="choice-intro">
-          <p class="eyebrow">CREATE YOUR FIT</p>
-          <h2>选择创建方式</h2>
-          <p>用最顺手的方式完成虚拟形象，整个过程不需要上传真人照片。</p>
-        </section>
-        <div class="choice-grid">
-          <button class="choice-option recommended" data-action="quick">
-            <span class="choice-visual quick-visual"><i></i><i></i><i></i></span>
-            <span class="choice-tag">推荐 · 约 20 秒</span>
-            <strong>快速选择</strong>
-            <span>在大屏选择身高范围与基础身形。</span>
-            <b>在大屏开始 ${icon('arrow-right')}</b>
-          </button>
-          <button class="choice-option" data-action="precise">
-            <span class="choice-visual phone-visual">${icon('smartphone', 56)}<i>${icon('ruler', 24)}</i></span>
-            <span class="choice-tag neutral">约 1 分钟</span>
-            <strong>手机填写</strong>
-            <span>扫码填写身高、体重与围度。</span>
-            <b>扫码填写 ${icon('qr-code')}</b>
-          </button>
-        </div>
-      </main>
-    </div>`;
-}
-
 function segmented(key, values) {
   return `<div class="segmented" data-group="${key}">${values.map((value) => `<button class="${state.quick[key] === value ? 'active' : ''}" data-quick-key="${key}" data-quick-value="${value}">${value}</button>`).join('')}</div>`;
 }
@@ -348,14 +319,15 @@ function renderQuick() {
   const preview = profileFromQuick();
   return `
     <div class="kiosk-page">
-      ${backBar('选择基础身形', '选择最接近你的选项，效果生成后仍可调整。')}
+      ${backBar('创建虚拟形象', '选择最接近你的选项，完成后立即生成。')}
       <main class="split-stage quick-stage">
         <section class="form-panel">
           <div class="field-block"><label>身高范围</label>${segmented('height', ['150–159 cm', '160–169 cm', '170 cm 以上'])}</div>
           <div class="field-block"><label>整体体型</label>${segmented('build', ['偏瘦', '标准', '丰满'])}</div>
           <div class="field-block"><label>身体比例</label>${segmented('shape', ['直筒型', '曲线型', '梨型'])}</div>
           <p class="inline-note">${icon('info', 18)} 不确定也没关系，稍后可以随时调整并重新生成。</p>
-          <button class="primary-btn wide" data-action="confirm-quick">继续 ${icon('arrow-right')}</button>
+          <button class="primary-btn wide" data-action="confirm-quick">开始生成 ${icon('sparkles')}</button>
+          <button class="precise-entry" data-action="precise">更精确？扫码去手机 ${icon('smartphone', 17)}</button>
         </section>
         <section class="avatar-preview">
           <span class="preview-label">形象预览</span>
@@ -402,26 +374,9 @@ function renderPreciseForm(inPhone = false) {
     </form>`;
 }
 
-function renderConfirm() {
-  const product = currentProduct();
-  const profile = currentProfile();
-  return `
-    <div class="kiosk-page">
-      ${backBar('准备试穿', '确认形象与服装后开始生成。')}
-      <main class="split-stage confirm-stage">
-        <section class="avatar-preview large"><span class="preview-label">虚拟形象</span><img class="avatar-master-image" src="${avatarMasterUrl(profile)}" alt="已选择的虚拟形象"></section>
-        <section class="confirm-copy">
-          <p class="eyebrow">READY TO TRY ON</p><h2>形象已准备好</h2>
-          <div class="outfit-row"><img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt="${product.name}"><div><small>即将试穿</small><strong>${product.name}</strong><span>${currentColor().name} · ${money(product.price)}</span></div></div>
-          <p class="inline-note">${icon('shield-check', 18)} 无需照片。AI 效果仅供款式和整体轮廓参考。</p>
-          <div class="button-row"><button class="secondary-btn" data-action="adjust">重新选择</button><button class="primary-btn" data-action="generate">开始生成 ${icon('sparkles')}</button></div>
-        </section>
-      </main>
-    </div>`;
-}
-
 function renderProcessing() {
   const product = currentProduct();
+  const profile = currentProfile();
   const stages = [
     ['人物准备', 15], ['服装适配', 48], ['细节优化', 78], ['即将完成', 96],
   ];
@@ -432,6 +387,7 @@ function renderProcessing() {
       <main class="processing-stage">
         <section class="scan-preview">${tryOnImageMarkup('processing-image')}<span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
         <section class="processing-copy">
+          <div class="generation-pair"><img src="${avatarMasterUrl(profile)}" alt="当前虚拟形象"><b>×</b><img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt="${product.name}"><span>${state.usingExampleProfile ? '已使用示例形象' : '已使用当前形象'} · 生成中</span></div>
           <p class="eyebrow">预计还需 ${Math.max(1, Math.ceil((100 - state.progress) / 20))} 秒</p>
           <h1>正在把 ${product.name}<br>适配到你的虚拟形象</h1>
           <div class="progress-track"><i style="width:${state.progress}%"></i></div><strong class="progress-number">${state.progress}%</strong>
@@ -479,7 +435,7 @@ function renderResult() {
           <p class="success-kicker">${icon('circle-check', 18)} 试穿效果已生成</p><h1>${product.name}</h1><p class="product-subtitle">${product.subtitle}</p><strong class="result-price">${money(product.price)}</strong>
           <div class="detail-group"><label>颜色</label><div class="color-options">${product.colors.map((color, index) => `<button class="${state.colorIndex === index ? 'active' : ''}" data-color="${index}"><i style="background:${color.hex}"></i><span>${color.name}</span></button>`).join('')}</div></div>
           <div class="detail-group"><label>本店尺码库存${state.selectedSize ? ` · 已选 ${state.selectedSize}` : ''}</label><div class="size-stock">${sizes.map(([size, count]) => `<button class="${state.selectedSize === size ? 'active' : ''} ${count === 0 ? 'soldout' : ''}" data-size="${size}" ${count === 0 ? 'disabled' : ''}><b>${size}</b><small>${count ? `${count} 件` : '缺货'}</small></button>`).join('')}</div></div>
-          <div class="result-actions"><button class="secondary-btn" data-action="change-product">${icon('shirt')} 换一件</button><button class="secondary-btn" data-action="regenerate">${icon('refresh-cw')} 重新生成</button></div>
+          <div class="result-actions"><button class="secondary-btn" data-action="adjust">${icon('ruler')} ${state.usingExampleProfile ? '换成我的轮廓' : '调整形象'}</button><button class="secondary-btn" data-action="change-product">${icon('shirt')} 换一件</button><button class="secondary-btn" data-action="regenerate">${icon('refresh-cw')} 重新生成</button></div>
           <section class="try-more-section">
             <div class="try-more-heading"><div><span>KEEP TRYING</span><h2>再试试其他款式</h2></div><small>保留当前形象，直接生成</small></div>
             <div class="try-more-list">
@@ -569,10 +525,8 @@ function renderPhoneModal() {
 function render() {
   const pages = {
     catalog: renderCatalog,
-    'avatar-choice': renderAvatarChoice,
     quick: renderQuick,
     'phone-wait': renderPhoneWait,
-    confirm: renderConfirm,
     processing: renderProcessing,
     result: renderResult,
     failure: () => renderFailure('failure'),
@@ -624,6 +578,7 @@ function startCountdown() {
       state.colorIndex = 0;
       state.profileReady = false;
       state.resultReady = false;
+      state.usingExampleProfile = false;
       state.changingProduct = false;
       setPage('catalog');
       toast('会话已结束，数据已清除');
@@ -633,7 +588,7 @@ function startCountdown() {
 
 function handleBack() {
   const previous = {
-    'avatar-choice': 'catalog', quick: 'avatar-choice', 'phone-wait': 'avatar-choice', confirm: 'avatar-choice',
+    quick: 'catalog', 'phone-wait': 'quick',
   };
   setPage(previous[state.page] || 'catalog');
 }
@@ -645,18 +600,19 @@ function handleFlowStep(step) {
   }
   if (step === 2) {
     state.changingProduct = false;
-    return setPage('avatar-choice');
+    return setPage('quick');
   }
-  if (!state.profileReady) {
-    setPage('avatar-choice');
-    return toast('请先创建虚拟形象');
-  }
-  if (step === 3) return setPage('confirm');
+  if (step === 3 && state.page === 'processing') return;
   if (step === 4 && state.resultReady) {
     setPage('result');
     return startCountdown();
   }
-  setPage('confirm');
+  if (!state.profileReady) {
+    setPage('quick');
+    return toast('请先创建虚拟形象');
+  }
+  if (step === 3) return startGeneration();
+  setPage('quick');
   return toast('请先完成 AI 生成');
 }
 
@@ -673,7 +629,11 @@ app.addEventListener('click', (event) => {
     state.colorIndex = 0;
     state.selectedSize = '';
     state.resultReady = false;
-    return render();
+    if (state.profileReady) {
+      state.changingProduct = false;
+      return startGeneration();
+    }
+    return setPage('quick');
   }
   const category = event.target.closest('[data-category]');
   if (category) {
@@ -723,30 +683,35 @@ app.addEventListener('click', (event) => {
   }
   if (action === 'back') return handleBack();
   if (action === 'start') {
-    if (state.changingProduct && state.profileReady) {
+    if (state.profileReady) {
       state.changingProduct = false;
       state.selectedSize = '';
       return startGeneration();
     }
-    return setPage('avatar-choice');
+    return setPage('quick');
   }
-  if (action === 'quick') return setPage('quick');
-  if (action === 'precise') return setPage(state.phoneComplete ? 'confirm' : 'phone-wait');
+  if (action === 'sample-try') {
+    state.profileId = 'standard-curved';
+    state.profileReady = false;
+    state.usingExampleProfile = true;
+    return startGeneration();
+  }
+  if (action === 'precise') return setPage('phone-wait');
   if (action === 'confirm-quick') {
     state.profileId = profileFromQuick().id;
     state.heightBand = state.quick.height;
     state.profileReady = true;
     state.resultReady = false;
-    return setPage('confirm');
+    state.usingExampleProfile = false;
+    return startGeneration();
   }
   if (action === 'simulate-phone') {
     state.modal = 'phone';
     return render();
   }
-  if (action === 'continue-confirm') return setPage('confirm');
-  if (action === 'adjust') return setPage('avatar-choice');
-  if (action === 'generate' || action === 'retry') return startGeneration();
-  if (action === 'cancel-generation') return setPage('confirm');
+  if (action === 'adjust') return setPage('quick');
+  if (action === 'retry') return startGeneration();
+  if (action === 'cancel-generation') return setPage(state.profileReady ? 'quick' : 'catalog');
   if (action === 'change-product') {
     state.changingProduct = state.profileReady;
     state.selectedSize = '';
@@ -758,6 +723,7 @@ app.addEventListener('click', (event) => {
     state.colorIndex = 0;
     state.profileReady = false;
     state.resultReady = false;
+    state.usingExampleProfile = false;
     state.changingProduct = false;
     setPage('catalog');
     return toast('本次体验数据已清除');
@@ -783,6 +749,7 @@ app.addEventListener('submit', (event) => {
   state.phoneComplete = true;
   state.profileReady = true;
   state.resultReady = false;
+  state.usingExampleProfile = false;
   const payload = { sessionId, profileId: state.profileId, heightBand: state.heightBand };
   localStorage.setItem(`forme-fitting-${sessionId}`, JSON.stringify(payload));
   syncChannel?.postMessage(payload);
@@ -796,8 +763,7 @@ app.addEventListener('submit', (event) => {
     window.location.replace(url);
   } else {
     state.modal = '';
-    setPage('confirm');
-    toast('手机填写已完成');
+    startGeneration();
   }
 });
 
