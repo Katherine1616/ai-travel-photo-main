@@ -81,6 +81,81 @@ function currentProfile() {
   return avatarProfiles.find((profile) => profile.id === state.profileId) || avatarProfiles[4];
 }
 
+const generatedAssetRoot = '/assets/tryon-generated';
+const productAssetKeys = {
+  'noir-blazer': 'noir-blazer-blue',
+  'ivory-dress': 'ivory-dress-purple',
+  'denim-jacket': 'denim-jacket-red',
+  'red-knit': 'red-knit-print',
+  'pleated-skirt': 'pleated-skirt-stripe',
+  'trench-coat': 'trench-coat-yellow',
+};
+
+const secondaryProductAssetKeys = {
+  'noir-blazer': 'noir-blazer-fog-grey',
+  'ivory-dress': 'ivory-dress-black',
+  'denim-jacket': 'denim-jacket-indigo',
+  'red-knit': 'red-knit-warm-white',
+  'pleated-skirt': 'pleated-skirt-sand-gold',
+  'trench-coat': 'trench-coat-pine-green',
+};
+
+const labeledProfileFolders = {
+  'slim-curved': 'slim/reference-matched',
+  'standard-curved': 'reference-matched',
+  'full-curved': 'full/reference-matched',
+};
+
+const avatarMasterAssets = {
+  'slim-straight': 'slim-straight/avatar-master.png',
+  'slim-curved': 'slim/avatar-master.png',
+  'slim-pear': 'slim-pear/avatar-master.png',
+  'standard-straight': 'standard-straight/avatar-master.png',
+  'standard-curved': 'avatar-master.png',
+  'standard-pear': 'standard-pear/avatar-master.png',
+  'full-straight': 'full-straight/avatar-master.png',
+  'full-curved': 'full/avatar-master.png',
+  'full-pear': 'full-pear/avatar-master.png',
+};
+
+// The extra body types were generated as one batch, so keep their product mapping
+// here instead of exposing the internal discretization to the interface.
+const additionalBodyTypeAssets = {
+  'slim-straight': { 'noir-blazer': 2, 'ivory-dress': 1, 'denim-jacket': 4, 'red-knit': 3, 'pleated-skirt': 6, 'trench-coat': 7 },
+  'slim-pear': { 'noir-blazer': 5, 'ivory-dress': 9, 'denim-jacket': 8, 'red-knit': 10, 'pleated-skirt': 11, 'trench-coat': 12 },
+  'standard-straight': { 'noir-blazer': 13, 'ivory-dress': 14, 'denim-jacket': 15, 'red-knit': 22, 'pleated-skirt': 18, 'trench-coat': 17 },
+  'standard-pear': { 'noir-blazer': 16, 'ivory-dress': 21, 'denim-jacket': 19, 'red-knit': 27, 'pleated-skirt': 28, 'trench-coat': 25 },
+  'full-straight': { 'noir-blazer': 20, 'ivory-dress': 26, 'denim-jacket': 24, 'red-knit': 29, 'pleated-skirt': 30, 'trench-coat': 32 },
+  'full-pear': { 'noir-blazer': 23, 'ivory-dress': 33, 'denim-jacket': 35, 'red-knit': 34, 'pleated-skirt': 31, 'trench-coat': 36 },
+};
+
+function tryOnImageUrl(profile = currentProfile(), product = currentProduct(), colorIndex = state.colorIndex) {
+  if (colorIndex === 1) {
+    const secondaryAsset = secondaryProductAssetKeys[product.id];
+    if (secondaryAsset) return `${generatedAssetRoot}/color-variants/${profile.id}/${secondaryAsset}.png`;
+  }
+
+  const assetKey = productAssetKeys[product.id] || productAssetKeys['noir-blazer'];
+  const labeledFolder = labeledProfileFolders[profile.id];
+  if (labeledFolder) return `${generatedAssetRoot}/${labeledFolder}/${assetKey}.png`;
+
+  const batchNumber = additionalBodyTypeAssets[profile.id]?.[product.id];
+  if (batchNumber) {
+    return `${generatedAssetRoot}/additional-body-types/body-type-combination-${String(batchNumber).padStart(2, '0')}.png`;
+  }
+
+  return `${generatedAssetRoot}/reference-matched/${assetKey}.png`;
+}
+
+function avatarMasterUrl(profile = currentProfile()) {
+  return `${generatedAssetRoot}/${avatarMasterAssets[profile.id] || avatarMasterAssets['standard-curved']}`;
+}
+
+function tryOnImageMarkup(className = '') {
+  const product = currentProduct();
+  return `<img class="tryon-image ${className}" src="${tryOnImageUrl()}" alt="${product.name} 试穿效果">`;
+}
+
 function silhouetteFigure(profile = currentProfile(), dressed = false, className = '') {
   const product = currentProduct();
   const color = currentColor();
@@ -279,7 +354,7 @@ function renderQuick() {
         </section>
         <section class="avatar-preview">
           <span class="preview-label">形象预览</span>
-          ${silhouetteFigure(preview)}
+          <img class="avatar-master-image" src="${avatarMasterUrl(preview)}" alt="${preview.build}${preview.shape}虚拟形象">
           <div class="avatar-caption"><strong>你的虚拟形象</strong><span>预览会随选择更新</span></div>
         </section>
       </main>
@@ -329,10 +404,10 @@ function renderConfirm() {
     <div class="kiosk-page">
       ${backBar('准备试穿', '确认形象与服装后开始生成。')}
       <main class="split-stage confirm-stage">
-        <section class="avatar-preview large"><span class="preview-label">虚拟形象</span>${silhouetteFigure(profile)}</section>
+        <section class="avatar-preview large"><span class="preview-label">虚拟形象</span><img class="avatar-master-image" src="${avatarMasterUrl(profile)}" alt="已选择的虚拟形象"></section>
         <section class="confirm-copy">
           <p class="eyebrow">READY TO TRY ON</p><h2>形象已准备好</h2>
-          <div class="outfit-row"><img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt=""><div><small>即将试穿</small><strong>${product.name}</strong><span>${currentColor().name} · ${money(product.price)}</span></div></div>
+          <div class="outfit-row"><img src="${product.colors[0].url}" style="object-position:${product.colors[0].position}" alt="${product.name}"><div><small>即将试穿</small><strong>${product.name}</strong><span>${currentColor().name} · ${money(product.price)}</span></div></div>
           <p class="inline-note">${icon('shield-check', 18)} 无需照片。AI 效果仅供款式和整体轮廓参考。</p>
           <div class="button-row"><button class="secondary-btn" data-action="adjust">重新选择</button><button class="primary-btn" data-action="generate">开始生成 ${icon('sparkles')}</button></div>
         </section>
@@ -350,7 +425,7 @@ function renderProcessing() {
     <div class="kiosk-page processing-page">
       ${flowHeader(3)}
       <main class="processing-stage">
-        <section class="scan-preview">${silhouetteFigure(currentProfile(), true, 'processing-figure')}<span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
+        <section class="scan-preview">${tryOnImageMarkup('processing-image')}<span class="scan-line"></span><span class="ai-chip">${icon('sparkles', 16)} AI 生成中</span></section>
         <section class="processing-copy">
           <p class="eyebrow">预计还需 ${Math.max(1, Math.ceil((100 - state.progress) / 20))} 秒</p>
           <h1>正在把 ${product.name}<br>适配到你的虚拟形象</h1>
@@ -386,12 +461,13 @@ function mobileUrl(mode) {
 function renderResult() {
   const product = currentProduct();
   const sizes = Object.entries(product.stock);
+  const otherProducts = products.filter((item) => item.id !== product.id);
   return `
     <div class="kiosk-page result-page">
       ${flowHeader(4)}
       <main class="result-layout">
         <section class="result-visual">
-          ${silhouetteFigure(currentProfile(), true, 'result-figure')}
+          ${tryOnImageMarkup('result-image')}
           <span class="result-disclaimer">AI 效果仅供款式与轮廓参考</span>
         </section>
         <section class="result-details">
@@ -399,6 +475,17 @@ function renderResult() {
           <div class="detail-group"><label>颜色</label><div class="color-options">${product.colors.map((color, index) => `<button class="${state.colorIndex === index ? 'active' : ''}" data-color="${index}"><i style="background:${color.hex}"></i><span>${color.name}</span></button>`).join('')}</div></div>
           <div class="detail-group"><label>本店尺码库存${state.selectedSize ? ` · 已选 ${state.selectedSize}` : ''}</label><div class="size-stock">${sizes.map(([size, count]) => `<button class="${state.selectedSize === size ? 'active' : ''} ${count === 0 ? 'soldout' : ''}" data-size="${size}" ${count === 0 ? 'disabled' : ''}><b>${size}</b><small>${count ? `${count} 件` : '缺货'}</small></button>`).join('')}</div></div>
           <div class="result-actions"><button class="secondary-btn" data-action="change-product">${icon('shirt')} 换一件</button><button class="secondary-btn" data-action="regenerate">${icon('refresh-cw')} 重新生成</button></div>
+          <section class="try-more-section">
+            <div class="try-more-heading"><div><span>KEEP TRYING</span><h2>再试试其他款式</h2></div><small>保留当前形象，直接生成</small></div>
+            <div class="try-more-list">
+              ${otherProducts.map((item) => `
+                <button class="try-more-card" data-try-product="${item.id}">
+                  <img src="${item.colors[0].url}" style="object-position:${item.colors[0].position}" alt="${item.name}">
+                  <span><strong>${item.name}</strong><small>${money(item.price)}</small></span>
+                  ${icon('arrow-right', 17)}
+                </button>`).join('')}
+            </div>
+          </section>
           <div class="handoff-strip"><div class="small-qr"><canvas class="js-qr" data-qr="${resultUrl()}"></canvas></div><div><strong>扫码带到手机</strong><span>查看实时库存、到店试穿或购买</span><small>${state.resultSeconds} 秒后自动清除大屏结果</small></div><button class="primary-btn" data-action="store-buy">本店购买</button></div>
           <button class="clear-link" data-action="clear-session">${icon('trash-2', 16)} 结束并清除本次数据</button>
         </section>
@@ -436,7 +523,7 @@ function renderMobile() {
   return `
     <div class="mobile-page result-mobile">
       <header class="mobile-header"><span class="brand-mark">F</span><div><strong>FORME</strong><small>CENTRAL STORE</small></div><button class="icon-btn" data-action="favorite" title="收藏">${icon('heart')}</button></header>
-      <main class="mobile-content no-top"><div class="mobile-result-image">${silhouetteFigure(currentProfile(), true, 'mobile-figure')}<span>AI 试穿效果</span></div>
+      <main class="mobile-content no-top"><div class="mobile-result-image">${tryOnImageMarkup('mobile-image')}<span>AI 试穿效果</span></div>
         <section class="mobile-product"><p>${product.category} · ${color.name}</p><h1>${product.name}</h1><strong>${money(product.price)}</strong><span>${product.subtitle}</span></section>
         <section class="mobile-section"><div class="mobile-section-title"><h2>选择尺码</h2><button data-action="size-help">尺码建议</button></div><div class="mobile-sizes">${Object.entries(product.stock).map(([size, count]) => `<button class="${state.selectedSize === size ? 'active' : ''} ${count === 0 ? 'soldout' : ''}" data-size="${size}" ${count === 0 ? 'disabled' : ''}><b>${size}</b><span>${count ? `${count} 件` : '缺货'}</span></button>`).join('')}</div></section>
         <section class="mobile-section"><h2>怎么带走</h2><div class="fulfilment-list"><button data-fulfilment="pickup">${icon('shopping-bag')}<span><strong>本店购买，立即取货</strong><small>选择后锁定 10 分钟</small></span>${icon('chevron-right')}</button><button data-fulfilment="fitting">${icon('door-open')}<span><strong>保留商品，进店试穿</strong><small>出示预约码，店员备货</small></span>${icon('chevron-right')}</button><button data-fulfilment="delivery">${icon('truck')}<span><strong>线上配送</strong><small>预计 2–3 天送达</small></span>${icon('chevron-right')}</button><button data-fulfilment="transfer">${icon('map-pin')}<span><strong>附近门店 / 跨店取货</strong><small>${stores[1].name} 有货</small></span>${icon('chevron-right')}</button></div></section>
@@ -570,7 +657,15 @@ app.addEventListener('click', (event) => {
   const color = event.target.closest('[data-color]');
   if (color) {
     state.colorIndex = Number(color.dataset.color);
+    state.selectedSize = '';
     return render();
+  }
+  const tryProduct = event.target.closest('[data-try-product]');
+  if (tryProduct) {
+    state.productId = tryProduct.dataset.tryProduct;
+    state.colorIndex = 0;
+    state.selectedSize = '';
+    return startGeneration();
   }
   const scenario = event.target.closest('[data-scenario]');
   if (scenario) {
