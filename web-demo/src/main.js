@@ -44,6 +44,7 @@ const state = {
 
 const categories = ['全部', ...new Set(products.map((product) => product.category))];
 let processTimer;
+let processCompletionTimer;
 let countdownTimer;
 
 function icon(name, size = 20) {
@@ -222,6 +223,7 @@ function setPage(page) {
   state.page = page;
   state.modal = '';
   window.clearInterval(processTimer);
+  window.clearTimeout(processCompletionTimer);
   window.clearInterval(countdownTimer);
   window.scrollTo({ top: 0, behavior: 'instant' });
   render();
@@ -550,11 +552,12 @@ function startGeneration() {
   state.resultReady = false;
   render();
   window.clearInterval(processTimer);
+  window.clearTimeout(processCompletionTimer);
   processTimer = window.setInterval(() => {
     state.progress = Math.min(100, state.progress + 13 + Math.floor(Math.random() * 9));
     if (state.progress >= 100) {
       window.clearInterval(processTimer);
-      window.setTimeout(() => {
+      processCompletionTimer = window.setTimeout(() => {
         if (state.scenario === 'failure') setPage('failure');
         else if (state.scenario === 'timeout') setPage('timeout');
         else {
@@ -707,7 +710,11 @@ app.addEventListener('click', (event) => {
   }
   if (action === 'adjust') return setPage('quick');
   if (action === 'retry') return startGeneration();
-  if (action === 'cancel-generation') return setPage(state.profileReady ? 'quick' : 'catalog');
+  if (action === 'cancel-generation') {
+    state.changingProduct = state.profileReady;
+    setPage('catalog');
+    return toast('已取消生成，当前选择已保留');
+  }
   if (action === 'change-product') {
     state.changingProduct = state.profileReady;
     state.selectedSize = '';
